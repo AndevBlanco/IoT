@@ -1,88 +1,100 @@
-//bibliotecas a incluir (algunas son de base)
-#include <SPI.h>
-#include <LoRa.h>
-#include <FreeRTOS.h>
-#include <task.h>
+#include <Arduino_FreeRTOS.h>
+#include "DHT.h"
+#include <RH_RF95.h>
 
-#define LORA_SS 10
-#define LORA_RST 9
-#define LORA_DIO0 2
+#define DHTPIN 4
+#define DHTTYPE DHT11 
+
+DHT dht(DHTPIN, DHTTYPE);
+
+int t;
+int h;
 
 
-// Definir el tamaño de la pila para la tarea
-#define STACK_SIZE 128
 
-// Declaración de las funciones de tarea
-void task1(void *pvParameters);
-void task2(void *pvParameters);
+#define RFM95_CS 10
+#define RFM95_RST 9
+#define RFM95_INT 2
 
-// Declaración de los manejadores de las tareas
+// Singleton instance of the radio driver
+RH_RF95 rf95(RFM95_CS, RFM95_INT);
+
+
+// Definición de las tareas
+void Task1(void *pvParameters);
+
+// Variables globales
 TaskHandle_t task1Handle;
-TaskHandle_t task2Handle;
 
-
-//configuracion inicial 
 void setup() {
+  // Inicialización de Arduino y otras configuraciones
   Serial.begin(9600);
-  while (!Serial);
+  // Creación de tareas
+  xTaskCreate(Task1, "Task1", 450, NULL, 2, &task1Handle);
 
-  //Configuro el modulo lora con sus pines correspondientes
-  LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0); 
+  dht.begin();
 
-  //inicio la comunicacion  a la frecuencia de 433 MHZ
-  if (!LoRa.begin(433E6)) { 
-    Serial.println("Error al iniciar el módulo LoRa");
-    while (1);
-  }
-
-  //Se ha iniciado correctamente
-  Serial.println("Módulo LoRa iniciado correctamente.");
-
-  //PARTE freeRTOS para la creacion de tareas / hilos
-
-  //creo las tareas
-  xTaskCreate(task1, "Task1", STACK_SIZE, NULL, 1, &task1Handle);
-  xTaskCreate(task2, "Task2", STACK_SIZE, NULL, 2, &task2Handle);
-
+  if (!rf95.init())
+    Serial.println("init failed");
+  Serial.println("funciona");
 
 }
 
-
-//el loop para ejecucion en bucle
 void loop() {
+  // El código en loop() no se ejecutará ya que el planificador de tareas se ha iniciado
+}
 
-
-  // put your main code here, to run repeatedly:
-  String mensaje = "¡Hola desde el Arduino 1!"; // El mensaje que deseas enviar
-
-  // Envía el mensaje
-  LoRa.beginPacket();
-  LoRa.print(mensaje);
-  LoRa.endPacket();
-
-  Serial.println("Mensaje enviado desde el Arduino 1: " + mensaje);
-
-  delay(5000); // Espera 5 segundos antes de enviar el siguiente mensaje
-
-  / Tarea 1
-void task1(void *pvParameters) {
+// Implementación de las tareas
+void Task1(void *pvParameters) {
   while (1) {
-    // Código de la tarea 1 aquí
-    
-    vTaskDelay(pdMS_TO_TICKS(1000)); // Retardo de 1 segundo
+    // Código de la tarea 1
+    //Serial.println("tarea 1");
+    t = int(dht.readTemperature() * 10);
+    Serial.print(F("La temperatura es: "));
+    Serial.println(t/10);
+    h = int(dht.readHumidity() * 10);
+    Serial.print(F("La temperatura es: "));
+    Serial.println(h/10);
+
+    int luz = analogRead(A1);
+    Serial.print(F("Valor de luz: "));
+    Serial.println(luz);
+    int tierra = analogRead(A0);
+    float tierra_humedad= map(tierra, 0, 1023, 0, 100);
+    Serial.print(F("Valor de tierra: "));
+    Serial.println(tierra);
+
+    Serial.println("Sending to rf95_server");
+  // Send a message to rf95_server
+  uint8_t data[] = "Hello World!";
+  rf95.send(data, sizeof(data));
+  
+  rf95.waitPacketSent();
+  // Now wait for a reply
+  uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+  uint8_t len = sizeof(buf);
+
+  if (rf95.waitAvailableTimeout(3000))
+  { 
+    // Should be a reply message for us now   
+    if (rf95.recv(buf, &len))
+   {
+      Serial.print("got reply: ");
+      Serial.println((char*)buf);
+//      Serial.print("RSSI: ");
+//      Serial.println(rf95.lastRssi(), DEC);    
+    }
+    else
+    {
+      Serial.println("recv failed");
+    }
+  }
+  else
+  {
+    Serial.println("No reply, is rf95_server running?");
+  }
+
+    // Delay opcional para evitar bloquear completamente la CPU
+    vTaskDelay(3000 / portTICK_PERIOD_MS); // Retraso de 1000 ms
   }
 }
-
-// Tarea 2
-void task2(void *pvParameters) {
-  while (1) {
-    // Código de la tarea 2 aquí
-    
-    vTaskDelay(pdMS_TO_TICKS(500)); // Retardo de 500 milisegundos
-  }
-}
-
-
-}
-
-
