@@ -2,40 +2,31 @@
 #include "DHT.h"
 #include <RH_RF95.h>
 
-#define DHTPIN 4
+//Defino el pin y modelo del dht11
+#define DHTPIN 8
 #define DHTTYPE DHT11 
-
-DHT dht(DHTPIN, DHTTYPE);
-
-int t;
-int h;
-
-
-
+//Defino los puertos del modulo lora
 #define RFM95_CS 10
 #define RFM95_RST 9
 #define RFM95_INT 2
 
-// Singleton instance of the radio driver
+//instancio lora y dht11 (importante el orden sino da error)
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
+DHT dht(DHTPIN, DHTTYPE);
 
-
-// Definición de las tareas
-void Task1(void *pvParameters);
-
-// Variables globales
-TaskHandle_t task1Handle;
+//Defino la tarea
+void Sensores(void *pvParameters);
 
 void setup() {
-  // Inicialización de Arduino y otras configuraciones
+  // Inicializo el Serie
   Serial.begin(9600);
   // Creación de tareas
-  xTaskCreate(Task1, "Task1", 450, NULL, 2, &task1Handle);
-
+  xTaskCreate(Sensores, "Sensores", 400, NULL, 1, NULL);
+  // Inicializo el dht11
   dht.begin();
+  // Inicializo el LoRa
+  rf95.init();
 
-  if (!rf95.init())
-    Serial.println("init failed");
   Serial.println("funciona");
 
 }
@@ -44,57 +35,58 @@ void loop() {
   // El código en loop() no se ejecutará ya que el planificador de tareas se ha iniciado
 }
 
-// Implementación de las tareas
-void Task1(void *pvParameters) {
+//Tarea de lectura de sensores y envio de estos
+void Sensores(void *pvParameters) {
   while (1) {
-    // Código de la tarea 1
-    //Serial.println("tarea 1");
-    t = int(dht.readTemperature() * 10);
-    Serial.print(F("La temperatura es: "));
-    Serial.println(t/10);
-    h = int(dht.readHumidity() * 10);
-    Serial.print(F("La temperatura es: "));
-    Serial.println(h/10);
 
+    //Leo los sensores
+    float t = dht.readTemperature();
+    //Serial.println(t);
+    float h = dht.readHumidity();
+    //Serial.println(h);
     int luz = analogRead(A1);
-    Serial.print(F("Valor de luz: "));
-    Serial.println(luz);
+    //Serial.println(luz);
     int tierra = analogRead(A0);
     float tierra_humedad= map(tierra, 0, 1023, 0, 100);
-    Serial.print(F("Valor de tierra: "));
-    Serial.println(tierra);
 
     Serial.println("Sending to rf95_server");
-  // Send a message to rf95_server
-  uint8_t data[] = "Hello World!";
-  rf95.send(data, sizeof(data));
-  
-  rf95.waitPacketSent();
-  // Now wait for a reply
-  uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
-  uint8_t len = sizeof(buf);
+    // Creo el mensaje con los datos
+    char data[70];
+    char t_str[10];
+    char h_str[10];
+    char tierra_str[10];
 
-  if (rf95.waitAvailableTimeout(3000))
-  { 
-    // Should be a reply message for us now   
-    if (rf95.recv(buf, &len))
-   {
-      Serial.print("got reply: ");
-      Serial.println((char*)buf);
-//      Serial.print("RSSI: ");
-//      Serial.println(rf95.lastRssi(), DEC);    
+    dtostrf(t, 5, 2, t_str);  // Convierte temperature en una cadena con 5 caracteres en total y 2 decimales
+    dtostrf(h, 5, 2, h_str);  // Convierte temperature en una cadena con 5 caracteres en total y 2 decimales
+    dtostrf(tierra_humedad, 5, 2, tierra_str);  // Convierte temperature en una cadena con 5 caracteres en total y 2 decimales
+
+
+    sprintf(data, "t = %s°C, h es: %s%%, luz es: %d, tierra es: %s", t_str, h_str, luz, tierra_str);
+    // Envio el mensaje
+    Serial.println((char*)data);
+    rf95.send((uint8_t*)data, strlen(data));
+    rf95.waitPacketSent();
+
+    uint8_t len = sizeof(data);
+    // Compruebo si hay respuesta
+    if (rf95.waitAvailableTimeout(3000))
+    { 
+      if (rf95.recv(data, &len))
+    {
+        Serial.print("got reply: ");
+        Serial.println((char*)data);
+      }
+      else
+      {
+        Serial.println("recv failed");
+      }
     }
     else
     {
-      Serial.println("recv failed");
+      Serial.println("No reply, is rf95_server running?");
     }
-  }
-  else
-  {
-    Serial.println("No reply, is rf95_server running?");
-  }
 
     // Delay opcional para evitar bloquear completamente la CPU
-    vTaskDelay(3000 / portTICK_PERIOD_MS); // Retraso de 1000 ms
+    vTaskDelay(3000 / portTICK_PERIOD_MS); // Retraso de 3 segundos
   }
 }
