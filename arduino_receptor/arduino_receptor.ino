@@ -1,38 +1,67 @@
-#include <SPI.h>
-#include <LoRa.h>
+#include <Arduino_FreeRTOS.h>
+#include <RH_RF95.h>
 
-#define LORA_SS 10
-#define LORA_RST 9
-#define LORA_DIO0 2
+#define RFM95_CS 10
+#define RFM95_RST 9
+#define RFM95_INT 2
+
+// Singleton instance of the radio driver
+RH_RF95 rf95(RFM95_CS, RFM95_INT);
+
+// Definición de las tareas
+void Task1(void *pvParameters);
+
+// Variables globales
+TaskHandle_t task1Handle;
 
 void setup() {
+  // Inicialización de Arduino y otras configuraciones
   Serial.begin(9600);
-  while (!Serial);
+  // Creación de tareas
+  xTaskCreate(Task1, "Task1", 400, NULL, 2, &task1Handle);
 
-  //Configuro el modulo lora con sus pines correspondientes
-  LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0); 
+  if (!rf95.init())
+    Serial.println("init failed");
+  Serial.println("funciona");
 
-  //inicio la comunicacion  a la frecuencia de 433 MHZ
-  if (!LoRa.begin(433E6)) { 
-    Serial.println("Error al iniciar el módulo LoRa");
-    while (1);
-  }
-
-  //Se ha iniciado correctamente
-  Serial.println("Módulo LoRa iniciado correctamente.");
 }
 
 void loop() {
-  // Verifica si hay paquetes entrantes
-  int packetSize = LoRa.parsePacket();
-  if (packetSize) {
-    String mensaje = "";
+  // El código en loop() no se ejecutará ya que el planificador de tareas se ha iniciado
+}
 
-    // Lee el mensaje recibido
-    while (LoRa.available()) {
-      mensaje += (char)LoRa.read();
+// Implementación de las tareas
+void Task1(void *pvParameters) {
+  while (1) {
+    
+
+    if (rf95.available())
+  {
+    // Should be a message for us now   
+    uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+    uint8_t len = sizeof(buf);
+    if (rf95.recv(buf, &len))
+    {
+      
+//      RH_RF95::printBuffer("request: ", buf, len);
+      Serial.print("got request: ");
+      Serial.println((char*)buf);
+//      Serial.print("RSSI: ");
+//      Serial.println(rf95.lastRssi(), DEC);
+      
+      // Send a reply
+      uint8_t data[] = "And hello back to you";
+      rf95.send(data, sizeof(data));
+      rf95.waitPacketSent();
+      Serial.println("Sent a reply");
+
     }
-
-    Serial.println("Mensaje recibido en el Arduino 2: " + mensaje);
+    else
+    {
+      Serial.println("recv failed");
+    }
+  }
+    // Delay opcional para evitar bloquear completamente la CPU
+    vTaskDelay(pdMS_TO_TICKS(2000)); // Retraso de 1000 ms
   }
 }
