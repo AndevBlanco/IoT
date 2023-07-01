@@ -16,18 +16,20 @@ DHT dht(DHTPIN, DHTTYPE);
 
 //Defino la tarea
 void Sensores(void *pvParameters);
+void Respuesta(void *pvParameters);
 
 void setup() {
   // Inicializo el Serie
   Serial.begin(9600);
   // Creación de tareas
-  xTaskCreate(Sensores, "Sensores", 400, NULL, 1, NULL);
+  xTaskCreate(Sensores, "Sensores", 256, NULL, 1, NULL);
+  xTaskCreate(Respuesta, "Respuesta", 128, NULL, 2, NULL);
   // Inicializo el dht11
   dht.begin();
   // Inicializo el LoRa
   rf95.init();
 
-  Serial.println("funciona");
+  Serial.println(F("funciona"));
 
 }
 
@@ -49,7 +51,7 @@ void Sensores(void *pvParameters) {
     int tierra = analogRead(A0);
     float tierra_humedad= map(tierra, 0, 1023, 0, 100);
 
-    Serial.println("Sending to rf95_server");
+    Serial.println(F("Sending"));
     // Creo el mensaje con los datos
     char data[70];
     char t_str[10];
@@ -60,33 +62,44 @@ void Sensores(void *pvParameters) {
     dtostrf(h, 5, 2, h_str);  // Convierte temperature en una cadena con 5 caracteres en total y 2 decimales
     dtostrf(tierra_humedad, 5, 2, tierra_str);  // Convierte temperature en una cadena con 5 caracteres en total y 2 decimales
 
-
     sprintf(data, "t = %s°C, h es: %s%%, luz es: %d, tierra es: %s", t_str, h_str, luz, tierra_str);
     // Envio el mensaje
     Serial.println((char*)data);
     rf95.send((uint8_t*)data, strlen(data));
     rf95.waitPacketSent();
 
+
+    vTaskDelay(3000 / portTICK_PERIOD_MS); // Retraso de 3 segundos
+
+  }
+}
+
+
+void Respuesta(void *pvParameters) {
+  while (1) {
+
+    Serial.print(F("respuesta ?"));
+    char data[70];
     uint8_t len = sizeof(data);
     // Compruebo si hay respuesta
     if (rf95.waitAvailableTimeout(3000))
     { 
       if (rf95.recv(data, &len))
     {
-        Serial.print("got reply: ");
+        Serial.print(F("reply: "));
         Serial.println((char*)data);
       }
       else
       {
-        Serial.println("recv failed");
+        Serial.println(F("failed"));
       }
     }
     else
     {
-      Serial.println("No reply, is rf95_server running?");
+      Serial.println(F("running?"));
     }
 
     // Delay opcional para evitar bloquear completamente la CPU
-    vTaskDelay(3000 / portTICK_PERIOD_MS); // Retraso de 3 segundos
+    vTaskDelay(5000 / portTICK_PERIOD_MS); // Retraso de 3 segundos
   }
 }
