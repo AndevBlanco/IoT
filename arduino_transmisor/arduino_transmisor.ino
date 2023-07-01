@@ -1,6 +1,8 @@
 #include <Arduino_FreeRTOS.h>
 #include "DHT.h"
 #include <RH_RF95.h>
+#include <ServoTimer2.h>
+
 
 //Defino el pin y modelo del dht11
 #define DHTPIN 8
@@ -9,6 +11,9 @@
 #define RFM95_CS 10
 #define RFM95_RST 9
 #define RFM95_INT 2
+
+//Defino mi conexion servo
+ServoTimer2 myservo;
 
 //instancio lora y dht11 (importante el orden sino da error)
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
@@ -29,6 +34,10 @@ void setup() {
   // Inicializo el LoRa
   rf95.init();
 
+
+  //Inicializo el servo al pin 7
+  myservo.attach(7);
+
   Serial.println(F("funciona"));
 
 }
@@ -46,14 +55,15 @@ void Sensores(void *pvParameters) {
     //Serial.println(t);
     float h = dht.readHumidity();
     //Serial.println(h);
+    //valor entre 0 y 1023
     int luz = analogRead(A1);
     //Serial.println(luz);
     int tierra = analogRead(A0);
-    float tierra_humedad= map(tierra, 0, 1023, 0, 100);
+    //valor entre 0 - 200
+    float tierra_humedad= map(tierra, 0, 200, 0, 100);
 
     Serial.println(F("Sending"));
     // Creo el mensaje con los datos
-    char data[70];
     char t_str[10];
     char h_str[10];
     char tierra_str[10];
@@ -62,14 +72,21 @@ void Sensores(void *pvParameters) {
     dtostrf(h, 5, 2, h_str);  // Convierte temperature en una cadena con 5 caracteres en total y 2 decimales
     dtostrf(tierra_humedad, 5, 2, tierra_str);  // Convierte temperature en una cadena con 5 caracteres en total y 2 decimales
 
+        // Calcular el tamaño necesario para el arreglo de caracteres
+    int dataSize = snprintf(nullptr, 0, "t = %s°C, h es: %s%%, luz es: %d, tierra es: %s", t_str, h_str, luz, tierra_str);
+
+    // Crear el arreglo de caracteres con el tamaño necesario
+    char data[dataSize + 1]; // +1 para el carácter nulo al final
+
     sprintf(data, "t = %s°C, h es: %s%%, luz es: %d, tierra es: %s", t_str, h_str, luz, tierra_str);
     // Envio el mensaje
+    //Serial.println(dataSize);
     Serial.println((char*)data);
     rf95.send((uint8_t*)data, strlen(data));
     rf95.waitPacketSent();
 
 
-    vTaskDelay(3000 / portTICK_PERIOD_MS); // Retraso de 3 segundos
+    vTaskDelay(5000 / portTICK_PERIOD_MS); // Retraso de 3 segundos
 
   }
 }
@@ -79,15 +96,17 @@ void Respuesta(void *pvParameters) {
   while (1) {
 
     Serial.print(F("respuesta ?"));
-    char data[70];
-    uint8_t len = sizeof(data);
+
+    //myservo.write(70);
+    char data2[70];
+    uint8_t len = sizeof(data2);
     // Compruebo si hay respuesta
     if (rf95.waitAvailableTimeout(3000))
     { 
-      if (rf95.recv(data, &len))
+      if (rf95.recv(data2, &len))
     {
         Serial.print(F("reply: "));
-        Serial.println((char*)data);
+        Serial.println((char*)data2);
       }
       else
       {
@@ -100,6 +119,6 @@ void Respuesta(void *pvParameters) {
     }
 
     // Delay opcional para evitar bloquear completamente la CPU
-    vTaskDelay(5000 / portTICK_PERIOD_MS); // Retraso de 3 segundos
+    vTaskDelay(100 / portTICK_PERIOD_MS); // Retraso de 3 segundos
   }
 }
