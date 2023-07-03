@@ -28,7 +28,7 @@ class MQTTSubscriber:
         print("Message content: " + msg.payload.decode())
 
 # Create an instance of MQTTSubscriber
-mqtt_subscriber = MQTTSubscriber("34.175.107.202", 1883, "device/data")
+mqtt_subscriber = MQTTSubscriber("34.175.107.202", 1883, "device/response")
 
 # Start the MQTT subscriber
 mqtt_subscriber.start()

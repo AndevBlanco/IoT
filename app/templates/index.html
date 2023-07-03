@@ -77,7 +77,7 @@
             </div>
             <hr class="dark horizontal my-0">
             <div class="card-footer p-3">
-              <p class="mb-0"><span class="text-success text-sm font-weight-bolder" id="percentage_ambient_humidity"></span> que la medida anterior</p>
+              <!-- <p class="mb-0"><span class="text-success text-sm font-weight-bolder" id="percentage_ambient_humidity"></span> que la medida anterior</p> -->
             </div>
           </div>
         </div>
@@ -100,7 +100,7 @@
             </div>
             <hr class="dark horizontal my-0">
             <div class="card-footer p-3">
-              <p class="mb-0"><span class="text-success text-sm font-weight-bolder" id="percentage_ambient_temperature"></span> que la medida anterior</p>
+              <!-- <p class="mb-0"><span class="text-success text-sm font-weight-bolder" id="percentage_ambient_temperature"></span> que la medida anterior</p> -->
             </div>
           </div>
         </div>
@@ -123,7 +123,7 @@
             </div>
             <hr class="dark horizontal my-0">
             <div class="card-footer p-3">
-              <p class="mb-0"><span class="text-success text-sm font-weight-bolder" id="percentage_ambient_light"></span> que la medida anterior</p>
+              <!-- <p class="mb-0"><span class="text-success text-sm font-weight-bolder" id="percentage_ambient_light"></span> que la medida anterior</p> -->
             </div>
           </div>
         </div>
@@ -146,7 +146,7 @@
             </div>
             <hr class="dark horizontal my-0">
             <div class="card-footer p-3">
-              <p class="mb-0"><span class="text-danger text-sm font-weight-bolder" id="percentage_soil_moisture"></span> que la medida anterior</p>
+              <!-- <p class="mb-0"><span class="text-danger text-sm font-weight-bolder" id="percentage_soil_moisture"></span> que la medida anterior</p> -->
             </div>
           </div>
         </div>
@@ -215,6 +215,14 @@
           </div>
         </div>
       </div>
+      <div class="row mt-4">
+        <div class="col-lg-4">
+          <form method="POST" action="{{ url_for('activateServo') }}">
+            <input type="hidden" name="servo" value="">
+            <button type="submit" class="btn btn-info">Encender/Apagar Servomotor</button>
+          </form>
+        </div>
+      </div> 
     </div>
   </main>
   <!--   Core JS Files   -->
@@ -572,11 +580,12 @@
     socket.on('data', function(data) {
       console.log(data);
       console.log(typeof(data));
-      $('#ambient_humidity').text(data.last.ambient_humidity);
-      $('#ambient_temperature').text(data.last.ambient_temperature);
-      $('#ambient_light').text(data.last.ambient_light);
-      $('#soil_moisture').text(data.last.soil_moisture);
-
+      $('input[name="servo"]').val(data.last.servo);
+      $('#ambient_humidity').text(Math.floor(data.last.ambient_humidity) + "%");
+      $('#ambient_temperature').text(Math.floor(data.last.ambient_temperature));
+      $('#ambient_light').text(Math.floor(data.last.ambient_light));
+      $('#soil_moisture').text(Math.floor(data.last.soil_moisture) + "%");
+      console.log("value servoooooo: ", $('input[name="servo"]').val());
       const ambient_humidity_chart = Chart.getChart("ambient_humidity_chart");
       var humidities = data.historical.map(obj => obj.ambient_humidity);
       ambient_humidity_chart.data.datasets[0].data = humidities.slice(-10);
