@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO
 from flask_debugtoolbar import DebugToolbarExtension
 import json, os
@@ -11,6 +11,7 @@ app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = False
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 socketio = SocketIO(app)
 mqtt_subscriber = None
+servo_status = '0'
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "./stoked-dryad-385005-5a579b96bb15.json"
 bigquery_client = bigquery.Client()
@@ -35,6 +36,9 @@ def on_message(client, userdata, msg):
     response_dict = json.loads(msg.payload)
     print(response_dict)
     print(type(response_dict))
+    servo_status = response_dict['servo']
+    print(f'value servoooooo: {servo_status}')
+    print(f'value servoooooo: {type(servo_status)}')
     rows_to_insert = [ response_dict ]
     errors = bigquery_client.insert_rows(table, rows_to_insert)
     query_job = bigquery_client.query(f"SELECT * FROM `{table_ref}`")
@@ -50,6 +54,25 @@ def on_message(client, userdata, msg):
 
 
     socketio.emit('data', {'last': response_dict, 'historical': historical})
+
+@app.route('/', methods=['POST'])
+def activateServo():
+    print("holaaaaaaaa")
+    print(request.form)
+    print(type(request.form['servo']))
+    if request.form['servo'] == '0':
+        servo_status = 180
+    else:
+        servo_status = 0
+
+    print(f'value servoooooo editado: {servo_status}')
+    client.publish('device/response', servo_status)
+    if mqtt_subscriber is not None:
+        print("data")
+    else:
+        print("MQTT Subscriber not initialized")
+
+    return render_template('index.html', data="data")
 
 client = None
 
